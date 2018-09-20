@@ -6,6 +6,7 @@ from io import FileIO
 from os import getcwd, chmod, mkdir, path, remove
 import subprocess
 import platform
+from pathlib import Path
 
 # Get current platform
 current_platform = platform.system()
@@ -30,7 +31,7 @@ if current_platform != 'Linux':
     
 
 # Path to install executable
-INSTALL_FOLDER = "/home/stanthesoupking/bin/"
+INSTALL_FOLDER = path.join(str(Path.home()), "bin")
 LAUNCHER_NAME = "gitd"
 
 launcher_path = path.join(INSTALL_FOLDER, LAUNCHER_NAME)

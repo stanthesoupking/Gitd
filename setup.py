@@ -5,6 +5,29 @@ from sys import argv, stderr
 from io import FileIO
 from os import getcwd, chmod, mkdir, path, remove
 import subprocess
+import platform
+
+# Get current platform
+current_platform = platform.system()
+
+# If platform isn't Linux
+if current_platform != 'Linux':
+    # Display warning and ask user if they still want to proceed
+
+    print(f"Warning: this installer is not supported by {current_platform} " +
+        "and may break your computer.")
+
+    ans = None
+    while(ans is None):
+        ans = input("Would you still like to continue (y/n)? ")
+        if(ans == 'y'):
+            ans = True
+        elif(ans == 'n'):
+            exit()
+        else:
+            print('Invalid input')
+            ans = None
+    
 
 # Path to install executable
 INSTALL_FOLDER = "/home/stanthesoupking/bin/"

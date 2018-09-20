@@ -6,16 +6,26 @@ from googleapiclient.errors import HttpError
 # Useful functions
 
 def get_files(service, path_id):
+    """Returns a list of all files inside the given folder id
+    """
     q = f"'{path_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
     result = service.files().list(q=q).execute()['files']
     return result
 
 def get_folders(service, path_id):
+    """Returns a list of all folders inside the given folder id
+    """
     q = f"'{path_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed = false"
     result = service.files().list(q=q).execute()['files']
     return result
 
 def create_folder(service, path, from_path = 'root', fail_if_exists = False):
+    """Creates a folder with the given path. If fail_if_exists is set to True
+    then the function will return False if a folder at the given path already
+    exists.
+
+    If this function succeeds then the ID of the new folder will be returned
+    """
     if 'path' == '':
         return 'root'
 

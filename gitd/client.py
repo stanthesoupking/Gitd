@@ -58,6 +58,9 @@ class Client:
         repos = [ x['name'] for x in get_folders(self.service, path_id) ]
         repos.sort()
 
+        if len(repos) < 1:
+            print("No folders/repositories found.")
+
         for repo in repos:
             print(repo)
         

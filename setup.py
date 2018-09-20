@@ -68,7 +68,7 @@ else:
             print("Error: Insufficient permissions.")
             exit()
 
-        run_command = 'python3 ' + getcwd() + '/main.py\n'
+        run_command = 'python3 ' + getcwd() + '/main.py $1 $2 $3\n'
         file.write('#!/bin/bash\n'.encode())
         file.write(run_command.encode())
         file.close()

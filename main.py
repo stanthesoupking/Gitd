@@ -69,6 +69,12 @@ def main():
         else:
             path = argv[2]
             client.init(WORKING_DIR, path)
+    elif(argv[1] == "list"):
+        if(len(argv) < 3):
+            client.list_repos()
+        else:
+            path = argv[2]
+            client.list_repos(path)
 
 if __name__ == '__main__':
     main()

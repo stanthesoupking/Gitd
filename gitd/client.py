@@ -50,3 +50,14 @@ class Client:
         else:
             repo = Repository(self.service, container, path = path, path_id = folder)
             print(f"Repository '{repo.get_name()}' initialised.")
+    
+    def list_repos(self, path = ''):
+        """Gets and displays available repositories inside the user's Drive at the given path.
+        """
+        path_id = find_folder_id(self.service, path)
+        repos = [ x['name'] for x in get_folders(self.service, path_id) ]
+        repos.sort()
+
+        for repo in repos:
+            print(repo)
+        

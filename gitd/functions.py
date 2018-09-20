@@ -181,7 +181,8 @@ def pull_from_folder(service, container, folder, recursive = True, force = False
     
     # Check to see if any files need deleting
     ffiles = [ x['name'] for x in files ]
-    to_delete = [ x for x in os.listdir(container) if x not in ffiles ]
+    to_delete = [ x for x in os.listdir(container) if x not in ffiles \
+        and x != '.gitd' ]
 
     # If files need to be deleted, ask user if they wish to proceed
     if not force and (len(to_delete) > 0):

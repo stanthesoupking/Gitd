@@ -89,7 +89,7 @@ def find_folder_id(service, path, from_path = 'root'):
 
     return current_id
 
-def push_from_folder(service, container, folder, recursive = True):
+def push_from_folder(service, container, folder, recursive = True, force = False):
     """Pushes files from the inside the container folder into the Drive folder with the given folder ID.
     This function is set to recursive by default, so it will upload files
     inside sub-directories
@@ -103,6 +103,27 @@ def push_from_folder(service, container, folder, recursive = True):
     efiles = get_files(service, folder)
     efolders = get_folders(service, folder)
 
+    to_delete = [ x for x in efiles if x['name'] not in ffiles ]
+    for efolder in efolders:
+        if efolder['name'] not in ffolders:
+            to_delete.append(efolder)
+
+    # If files need to be deleted, ask user if they wish to proceed
+    if not force and (len(to_delete) > 0):
+        print("The following files/folders are present and need to be deleted in order to push.")
+        for file in to_delete:
+            if(file['mimeType'] == 'application/vnd.google-apps.folder'):
+                print(f" {file['name']}/...")
+            else:
+                print(f" {file['name']}")
+        if not prompt("Do you still wish to proceed (y/n)? "):
+            return
+
+    # Delete out-dated files on Google Drive
+    for file in to_delete:
+        service.files().delete(fileId = file['id']).execute()
+
+    # Upload files
     for ffile in ffiles:
         updated = False
         for efile in efiles:
@@ -125,6 +146,7 @@ def push_from_folder(service, container, folder, recursive = True):
 
             service.files().create(body = body, media_body = media).execute()
 
+    # Create folders
     for ffolder in ffolders:
         updated = False
         for efolder in efolders:
@@ -169,17 +191,8 @@ def pull_from_folder(service, container, folder, recursive = True, force = False
                 print(f" {file}/...")
             else:
                 print(f" {file}")
-
-        ans = None
-        while(ans == None):
-            ans = input("Do you still wish to proceed (y/n)? ")
-            if(ans == 'y'):
-                ans = True
-            elif(ans == 'n'):
-                return
-            else:
-                print('Invalid input')
-                ans = None
+        if not prompt("Do you still wish to proceed (y/n)? "):
+            return
     
     # Delete files that didn't exist on the Google Drive
     for file in to_delete:
@@ -224,3 +237,17 @@ def to_path(path):
     """
     path += "/" if path[-1:] != "/" else ""
     return path
+
+def prompt(message):
+    ans = None
+    while(ans == None):
+        ans = input(message)
+        if(ans == 'y'):
+            ans = True
+        elif(ans == 'n'):
+            return
+        else:
+            print('Invalid input')
+            ans = None
+    
+    return ans

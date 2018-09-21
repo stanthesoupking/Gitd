@@ -1,6 +1,8 @@
 from io import FileIO
 import json
 from .functions import *
+import os
+import time
 
 REPO_FILE = ".gitd"
 
@@ -15,17 +17,15 @@ def get_repo_in_folder(service, folder):
         return None
 
 def clone_repo_in_folder(service, folder, path):
-    folder = to_path(folder)
-
     # Create repo folder
     name = path.split('/')[-1:][0]
-    destination = folder+name+'/'
+    destination = os.path.join(folder, name)
     try:
         os.mkdir(destination)
     except FileExistsError:
         pass
 
-    if(os.path.isfile(destination+REPO_FILE)):
+    if(os.path.isfile(os.path.join(destination, REPO_FILE))):
         # Return false, can't clone a repository into a folder already contains a repository
         return False    
     else:
@@ -44,7 +44,8 @@ class Repository:
             # Config file didn't exist, create config
             self.data = {
                 'path': path,
-                'name': path.split("/")[-1:][0]
+                'name': path.split("/")[-1:][0],
+                'sync_time': 0
             }
 
         self.corrupt = False
@@ -74,6 +75,7 @@ class Repository:
             return
 
         pull_from_folder(self.service, self.container, self.data['path_id'])
+        self.set_sync_time(time.time())
 
     def push(self):
         """Push changes to the Drive folder
@@ -81,7 +83,9 @@ class Repository:
         if self.is_corrupt():
             return
         
-        push_from_folder(self.service, self.container, self.data['path_id'])
+        push_from_folder(self.service, self.container,
+            self.data['path_id'], after_time = self.get_sync_time())
+        self.set_sync_time(time.time())
 
     def read_config(self):
         """Attempt to read config file and set config data.
@@ -119,3 +123,22 @@ class Repository:
         """Get the name of this repository
         """
         return self.data['name']
+
+    def set_sync_time(self, time):
+        self.data['sync_time'] = time
+        self.write_config()
+    
+    def get_sync_time(self):
+        return self.data['sync_time']
+
+    def reset_changes_token(self):
+        self.data['changes_token'] = self.service.changes().getStartPageToken().execute()['startPageToken']
+        self.write_config()
+
+    def is_out_of_date(self):
+        """Returns True if the repository is out o; the Drive has been modified
+        since the last pull/push request.
+        """
+        pass
+        #files = self.service.files().list(q=f"'{self.data['path_id']}' in parents and trashed = false", fields="files(name, id, md5Checksum)").execute()
+        #print(files)

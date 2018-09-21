@@ -3,14 +3,15 @@ from io import FileIO
 from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 from googleapiclient.errors import HttpError
 from shutil import rmtree
+from hashlib import md5
 
 # Useful functions
 
-def get_files(service, path_id):
+def get_files(service, path_id, fields = 'files(name, id, mimeType)'):
     """Returns a list of all files inside the given folder id
     """
     q = f"'{path_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
-    result = service.files().list(q=q).execute()['files']
+    result = service.files().list(q=q, fields = fields).execute()['files']
     return result
 
 def get_folders(service, path_id):
@@ -89,13 +90,13 @@ def find_folder_id(service, path, from_path = 'root'):
 
     return current_id
 
-def push_from_folder(service, container, folder, recursive = True, force = False):
+def push_from_folder(service, container, folder, recursive = True, force = False, after_time = None):
     """Pushes files from the inside the container folder into the Drive folder with the given folder ID.
     This function is set to recursive by default, so it will upload files
     inside sub-directories
     """
     container = to_path(container)
-    ls = os.listdir(container)
+    ls = [ x for x in os.listdir(container) ]
 
     ffiles = [ x for x in ls if os.path.isfile(container+x) ]
     ffolders = [ x for x in ls if x not in ffiles ]
@@ -125,15 +126,25 @@ def push_from_folder(service, container, folder, recursive = True, force = False
 
     # Upload files
     for ffile in ffiles:
+        if(ffile == '.gitd'):
+            continue
         updated = False
         for efile in efiles:
             if ffile == efile['name']:
-                print(f"Updating {ffile}...")
-
-                media = MediaFileUpload(container+ffile)
-                service.files().update(fileId = efile['id'], media_body = media).execute()
-                updated = True
-                break
+                # Check if file was modified after the given after_time
+                if not after_time or\
+                    (os.path.getmtime(os.path.join(container, ffile)) <= after_time):
+                    # File was modified before or at given after time, skip it.
+                    print(f"{ffile} already up-to-date.")
+                    updated = True
+                    break
+                else:
+                    # File modified after given after_time, upload it.
+                    print(f"Updating {ffile}...")
+                    media = MediaFileUpload(container+ffile)
+                    service.files().update(fileId = efile['id'], media_body = media).execute()
+                    updated = True
+                    break
         if not updated:
             print(f"Uploading new file {ffile}...")
 
@@ -151,7 +162,6 @@ def push_from_folder(service, container, folder, recursive = True, force = False
         updated = False
         for efolder in efolders:
             if ffolder == efolder['name']:
-                print(f"Updating {ffolder}...")
                 push_from_folder(service, container+ffolder+"/", efolder['id'])
                 updated = True
                 break
@@ -176,8 +186,9 @@ def pull_from_folder(service, container, folder, recursive = True, force = False
     the user responds 'Yes' to any prompt.
     """
     container = to_path(container)
-    q=f"'{folder}' in parents and trashed = false"
-    files = service.files().list(q=q).execute()['files']
+    files = get_files(service, folder, fields = 'files(name, id, md5Checksum, mimeType)')
+    for x in get_folders(service, folder):
+        files.append(x)
     
     # Check to see if any files need deleting
     ffiles = [ x['name'] for x in files ]
@@ -206,25 +217,35 @@ def pull_from_folder(service, container, folder, recursive = True, force = False
 
     # Download files from Drive
     for file in files:
-            if(file['mimeType'] == 'application/vnd.google-apps.folder'):
-                # File is of type folder, create folder an download it's files
-                path = container+file['name']
-                safe_create_folder(path)
-                if recursive:
-                    pull_from_folder(service, path, file['id'])
-            else:
-                print(f"Pulling {file['name']} into {container}...")
-                request = service.files().get_media(fileId=file['id'])
-                fh = FileIO(container+file['name'],'wb')
-                try:
-                    downloader = MediaIoBaseDownload(fh, request)
-                    done = False
-                    while done is False:
-                        status, done = downloader.next_chunk()
-                        print("Download %d%%." % int(status.progress() * 100))
-                except HttpError:
-                    print("Failed")
-                fh.close()
+        if(file['name'] == '.gitd'):
+            continue
+
+        if(file['mimeType'] == 'application/vnd.google-apps.folder'):
+            # File is of type folder, create folder an download it's files
+            path = os.path.join(container, file['name'])
+            safe_create_folder(path)
+            if recursive:
+                pull_from_folder(service, path, file['id'])
+        else:
+            file_path = os.path.join(container, file['name'])
+            if(os.path.isfile(file_path)):
+                emd5 = get_md5_checksum(file_path)
+                fmd5 = file['md5Checksum']
+                if(emd5 == fmd5):
+                    print(f"File '{file['name']}' is up-to-date.")
+                    continue
+            print(f"Pulling file '{file['name']}' into {container}...")
+            request = service.files().get_media(fileId=file['id'])
+            fh = FileIO(file_path,'wb')
+            try:
+                downloader = MediaIoBaseDownload(fh, request)
+                done = False
+                while done is False:
+                    status, done = downloader.next_chunk()
+                    print("Download %d%%." % int(status.progress() * 100))
+            except HttpError:
+                print("Failed")
+            fh.close()
 
 def safe_create_folder(directory):
     """Checks to see if the directory already exists, if not then create it.
@@ -240,6 +261,9 @@ def to_path(path):
     return path
 
 def prompt(message):
+    """Ask user for a 'y' or 'n' response to a message.
+    Return True if the user enters 'y' and False if user enters 'n'.
+    """
     ans = None
     while(ans == None):
         ans = input(message)
@@ -252,3 +276,12 @@ def prompt(message):
             ans = None
     
     return ans
+
+def get_md5_checksum(path):
+    """Returns the md5 checksum of the given file
+    """
+    hash_md5 = md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()

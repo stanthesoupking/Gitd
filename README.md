@@ -1,4 +1,5 @@
 # Gitd
+***Warning: in its current state, I can't guarantee that it won't delete your stuff***  
 Gitd is a git-like command-line interface for pulling and pushing files from your personal Google Drive.
 
 ## Installation
